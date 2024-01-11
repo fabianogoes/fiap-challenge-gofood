@@ -24,6 +24,29 @@ services:
     networks:
       - go-food-network
 
+  gofood:
+    build:
+      context: .
+    container_name: gofood_app
+    restart: always
+    environment:
+      APP_NAME: "${APP_NAME}"
+      APP_ENV: "${APP_ENV}"
+      HTTP_URL: "${HTTP_URL}"
+      HTTP_PORT: "${HTTP_PORT}"
+      DB_CONNECTION: "${DB_CONNECTION}"
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      DB_DATABASE: "${DB_DATABASE}"
+      DB_USERNAME: "${DB_USERNAME}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+    networks:
+      - go-food-network
+
 networks: 
   go-food-network:
     driver: bridge

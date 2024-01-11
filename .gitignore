@@ -5,6 +5,7 @@
 # exclude build artifacts
 bin/
 tmp/
+portgres/
 
 # exclude any development-specific files
 *.env

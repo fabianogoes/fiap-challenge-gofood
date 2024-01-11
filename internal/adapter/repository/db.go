@@ -15,13 +15,13 @@ func InitDB(ctx context.Context) (*gorm.DB, error) {
 	loc, _ := time.LoadLocation("UTC")
 
 	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%s dbname=%s sslmode=disable TimeZone=%s",
-		os.Getenv("DB_USERNAME"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_DATABASE"),
-		loc,
-	)
+   os.Getenv("DB_USERNAME"),
+   os.Getenv("DB_PASSWORD"),
+   "postgres",
+   os.Getenv("DB_PORT"),
+   os.Getenv("DB_DATABASE"),
+   loc,
+)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
