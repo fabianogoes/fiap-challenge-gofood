@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/fiap/challenge-gofood/internal/adapter/delivery"
 	"github.com/fiap/challenge-gofood/internal/adapter/handler"
+	"github.com/fiap/challenge-gofood/internal/adapter/payment"
 	"github.com/fiap/challenge-gofood/internal/adapter/repository"
-	"github.com/fiap/challenge-gofood/internal/core/service"
+	"github.com/fiap/challenge-gofood/internal/domain/service"
 	"github.com/joho/godotenv"
 )
 
@@ -21,13 +23,20 @@ func init() {
 
 	if env == "production" {
 		logHandler = slog.NewJSONHandler(os.Stdout, nil)
+
+		// Load .env file
+		err := godotenv.Load()
+		if err != nil {
+			slog.Error("Error loading .env file", "error", err)
+			os.Exit(1)
+		}
 	} else {
 		logHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		})
 
 		// Load .env file
-		err := godotenv.Load()
+		err := godotenv.Load(".env.development")
 		if err != nil {
 			slog.Error("Error loading .env file", "error", err)
 			os.Exit(1)
@@ -73,8 +82,22 @@ func main() {
 	productUseCase := service.NewProductService(productRepository)
 	productHandler := handler.NewProductHandler(productUseCase)
 
-	orderRepository := repository.NewOrderRepository(db)
-	orderUseCase := service.NewOrderService(orderRepository, customerRepository)
+	paymentClientAdapter := payment.NewPaymentClientAdapter()
+	paymentRepository := repository.NewPaymentRepository(db)
+	paymentUseCase := service.NewPaymentService(paymentRepository)
+	orderItemRepository := repository.NewOrderItemRepository(db)
+	orderRepository := repository.NewOrderRepository(db, orderItemRepository)
+	deliveryClientAdapter := delivery.NewDeliveryClientAdapter()
+	deliveryRepository := repository.NewDeliveryRepository(db)
+	orderUseCase := service.NewOrderService(
+		orderRepository,
+		customerRepository,
+		attendantRepository,
+		paymentUseCase,
+		paymentClientAdapter,
+		deliveryClientAdapter,
+		deliveryRepository,
+	)
 	orderHandler := handler.NewOrderHandler(
 		orderUseCase,
 		customerUseCase,

@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/fiap/challenge-gofood/internal/core/domain"
-	"github.com/fiap/challenge-gofood/internal/core/port"
+	"github.com/fiap/challenge-gofood/internal/adapter/handler/dto"
+	"github.com/fiap/challenge-gofood/internal/domain/port"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,21 +31,13 @@ func NewOrderHandler(
 	}
 }
 
-type StartOrderRequest struct {
-	CustomerCPF string `json:"customerCPF"`
-	AttendantID uint   `json:"attendantID"`
-}
-
-type StartOrderResponse struct {
-	ID uint `json:"id"`
-}
-
 func (h *OrderHandler) StartOrder(c *gin.Context) {
-	var request StartOrderRequest
+	var request dto.StartOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
 	if _, err := h.attendantUseCase.GetAttendantById(uint(request.AttendantID)); err != nil {
@@ -71,22 +64,7 @@ func (h *OrderHandler) StartOrder(c *gin.Context) {
 		return
 	}
 
-	response := StartOrderResponse{
-		ID: order.ID,
-	}
-
-	c.JSON(http.StatusCreated, response)
-}
-
-type AddItemToOrderRequest struct {
-	ProductID uint `json:"productID"`
-	Quantity  int  `json:"quantity"`
-}
-
-type AddItemToOrderResponse struct {
-	ID         uint    `json:"id"`
-	Amount     float64 `json:"amount"`
-	ItemsTotal int     `json:"itemsTotal"`
+	c.JSON(http.StatusCreated, dto.ToStartOrderResponse(order))
 }
 
 func (h *OrderHandler) AddItemToOrder(c *gin.Context) {
@@ -95,9 +73,10 @@ func (h *OrderHandler) AddItemToOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
-	var request AddItemToOrderRequest
+	var request dto.AddItemToOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -128,55 +107,44 @@ func (h *OrderHandler) AddItemToOrder(c *gin.Context) {
 		return
 	}
 
-	response := mapOrderResponse(orderUpdated)
-
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusCreated, dto.ToOrderResponse(orderUpdated))
 }
 
-type OrderResponse struct {
-	ID            uint    `json:"id"`
-	CustomerID    uint    `json:"customerID"`
-	CustomerCPF   string  `json:"customerCPF"`
-	CustomerName  string  `json:"customerName"`
-	AttendantID   uint    `json:"attendantID"`
-	AttendantName string  `json:"attendantName"`
-	Amount        float64 `json:"amount"`
-	ItemsTotal    int     `json:"itemsTotal"`
-	Status        string  `json:"status"`
-	PaymentStatus string  `json:"paymentStatus"`
-	Items         []OrderItemResponse
-}
-
-type OrderItemResponse struct {
-	ProductID   uint    `json:"productID"`
-	ProductName string  `json:"productName"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unitPrice"`
-}
-
-func mapOrderResponse(order *domain.Order) OrderResponse {
-	response := OrderResponse{
-		ID:            order.ID,
-		CustomerCPF:   order.Customer.CPF,
-		CustomerName:  order.Customer.Name,
-		AttendantID:   order.Attendant.ID,
-		AttendantName: order.Attendant.Name,
-		Amount:        order.Amount,
-		ItemsTotal:    order.ItemsTotal,
-		Status:        order.Status.ToString(),
-		PaymentStatus: order.PaymentStatus,
-		Items:         []OrderItemResponse{},
-	}
-
-	for _, item := range order.Items {
-		response.Items = append(response.Items, OrderItemResponse{
-			ProductID:   item.Product.ID,
-			ProductName: item.Product.Name,
-			Quantity:    item.Quantity,
-			UnitPrice:   item.UnitPrice,
+func (h *OrderHandler) RemoveItemFromOrder(c *gin.Context) {
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		message := fmt.Errorf("error to convert order id to int - %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": message.Error(),
 		})
+		return
 	}
-	return response
+
+	itemID, err := strconv.Atoi(c.Param("iditem"))
+	if err != nil {
+		message := fmt.Errorf("error to convert item id to int - %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": message.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	orderUpdated, err := h.OrderUseCase.RemoveItemFromOrder(order, uint(itemID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.ToOrderResponse(orderUpdated))
 }
 
 func (h *OrderHandler) GetOrderById(c *gin.Context) {
@@ -185,6 +153,7 @@ func (h *OrderHandler) GetOrderById(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
 	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
@@ -195,7 +164,214 @@ func (h *OrderHandler) GetOrderById(c *gin.Context) {
 		return
 	}
 
-	response := mapOrderResponse(order)
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
 
-	c.JSON(http.StatusOK, response)
+func (h *OrderHandler) ConfirmationOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err = h.OrderUseCase.ConfirmationOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) PaymentOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var request dto.PaymentOrderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+	}
+
+	order, err = h.OrderUseCase.PaymentOrder(order, request.PaymentMethod)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) InPreparationOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err = h.OrderUseCase.InPreparationOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) ReadyForDeliveryOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err = h.OrderUseCase.ReadyForDeliveryOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) SentForDeliveryOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err = h.OrderUseCase.SentForDeliveryOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) DeliveredOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err = h.OrderUseCase.DeliveredOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
+}
+
+func (h *OrderHandler) CancelOrder(c *gin.Context) {
+	var err error
+	orderID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	order, err := h.OrderUseCase.GetOrderById(uint(orderID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	order, err = h.OrderUseCase.CancelOrder(order)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToOrderResponse(order))
 }

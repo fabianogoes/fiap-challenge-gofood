@@ -1,4 +1,4 @@
-package domain
+package entity
 
 import "time"
 
@@ -7,11 +7,14 @@ type PaymentStatus int
 const (
 	PaymentStatusPending PaymentStatus = iota
 	PaymentStatusPaid
+	PaymentStatusReversed
 	PaymentStatusCanceled
+	PaymentStatusError
+	PaymentStatusNone
 )
 
 func (ps PaymentStatus) ToString() string {
-	return [...]string{"PENDING", "PAID", "CANCELED"}[ps]
+	return [...]string{"PENDING", "PAID", "REVERSED", "CANCELED", "ERROR", "NONE"}[ps]
 }
 
 func (ps PaymentStatus) ToPaymentStatus(status string) PaymentStatus {
@@ -20,10 +23,14 @@ func (ps PaymentStatus) ToPaymentStatus(status string) PaymentStatus {
 		return PaymentStatusPending
 	case "PAID":
 		return PaymentStatusPaid
+	case "REVERSED":
+		return PaymentStatusReversed
 	case "CANCELED":
 		return PaymentStatusCanceled
+	case "ERROR":
+		return PaymentStatusError
 	default:
-		return PaymentStatusPending
+		return PaymentStatusNone
 	}
 }
 
@@ -33,13 +40,15 @@ const (
 	PaymentMethodCreditCard PaymentMethod = iota
 	PaymentMethodDebitCard
 	PaymentMethodMoney
+	PaymentMethodPIX
+	PaymentMethodNone
 )
 
 func (pm PaymentMethod) ToString() string {
-	return [...]string{"CREDIT_CARD", "DEBIT_CARD", "MONEY"}[pm]
+	return [...]string{"CREDIT_CARD", "DEBIT_CARD", "MONEY", "PIX", "NONE"}[pm]
 }
 
-func (pm PaymentMethod) ToPaymentMethod(method string) PaymentMethod {
+func ToPaymentMethod(method string) PaymentMethod {
 	switch method {
 	case "CREDIT_CARD":
 		return PaymentMethodCreditCard
@@ -47,13 +56,15 @@ func (pm PaymentMethod) ToPaymentMethod(method string) PaymentMethod {
 		return PaymentMethodDebitCard
 	case "MONEY":
 		return PaymentMethodMoney
+	case "PIX":
+		return PaymentMethodPIX
 	default:
-		return PaymentMethodMoney
+		return PaymentMethodNone
 	}
 }
 
 type Payment struct {
-	ID        int64
+	ID        uint
 	Order     Order
 	Date      time.Time
 	Method    PaymentMethod

@@ -3,14 +3,10 @@ package repository
 import (
 	"fmt"
 
-	"github.com/fiap/challenge-gofood/internal/core/domain"
+	"github.com/fiap/challenge-gofood/internal/adapter/repository/dbo"
+	"github.com/fiap/challenge-gofood/internal/domain/entity"
 	"gorm.io/gorm"
 )
-
-type Attendant struct {
-	gorm.Model
-	Name string `gorm:"unique"`
-}
 
 type AttendantRepository struct {
 	db *gorm.DB
@@ -22,8 +18,8 @@ func NewAttendantRepository(db *gorm.DB) *AttendantRepository {
 	}
 }
 
-func (c *AttendantRepository) CreateAttendant(name string) (*domain.Attendant, error) {
-	attendant := &Attendant{
+func (c *AttendantRepository) CreateAttendant(name string) (*entity.Attendant, error) {
+	attendant := &dbo.Attendant{
 		Name: name,
 	}
 
@@ -32,52 +28,43 @@ func (c *AttendantRepository) CreateAttendant(name string) (*domain.Attendant, e
 		return nil, err
 	}
 
-	var result Attendant
-	c.db.Where("name = ?", name).First(&result)
-
-	return &domain.Attendant{
-		ID:        result.ID,
-		Name:      result.Name,
-		CreatedAt: result.CreatedAt,
-		UpdatedAt: result.UpdatedAt,
-	}, nil
+	return c.GetAttendantByName(name)
 }
 
-func (c *AttendantRepository) GetAttendantById(id uint) (*domain.Attendant, error) {
-	var result Attendant
+func (c *AttendantRepository) GetAttendantByName(name string) (*entity.Attendant, error) {
+	var result dbo.Attendant
+	if err := c.db.Where("name = ?", name).First(&result).Error; err != nil {
+		return nil, fmt.Errorf("error to find attendant with name %s - %v", name, err)
+	}
+
+	return result.ToEntity(), nil
+}
+
+func (c *AttendantRepository) GetAttendantById(id uint) (*entity.Attendant, error) {
+	var result dbo.Attendant
 	if err := c.db.First(&result, id).Error; err != nil {
 		return nil, fmt.Errorf("error to find attendant with id %d - %v", id, err)
 	}
 
-	return &domain.Attendant{
-		ID:        result.ID,
-		Name:      result.Name,
-		CreatedAt: result.CreatedAt,
-		UpdatedAt: result.UpdatedAt,
-	}, nil
+	return result.ToEntity(), nil
 }
 
-func (c *AttendantRepository) GetAttendants() ([]*domain.Attendant, error) {
-	var results []*Attendant
+func (c *AttendantRepository) GetAttendants() ([]*entity.Attendant, error) {
+	var results []*dbo.Attendant
 	if err := c.db.Find(&results).Error; err != nil {
 		return nil, err
 	}
 
-	var attendants []*domain.Attendant
+	var attendants []*entity.Attendant
 	for _, result := range results {
-		attendants = append(attendants, &domain.Attendant{
-			ID:        result.ID,
-			Name:      result.Name,
-			CreatedAt: result.CreatedAt,
-			UpdatedAt: result.UpdatedAt,
-		})
+		attendants = append(attendants, result.ToEntity())
 	}
 
 	return attendants, nil
 }
 
-func (c *AttendantRepository) UpdateAttendant(attendant *domain.Attendant) (*domain.Attendant, error) {
-	var result Attendant
+func (c *AttendantRepository) UpdateAttendant(attendant *entity.Attendant) (*entity.Attendant, error) {
+	var result dbo.Attendant
 	if err := c.db.First(&result, attendant.ID).Error; err != nil {
 		return nil, err
 	}
@@ -92,7 +79,7 @@ func (c *AttendantRepository) UpdateAttendant(attendant *domain.Attendant) (*dom
 }
 
 func (c *AttendantRepository) DeleteAttendant(id uint) error {
-	if err := c.db.Delete(&Attendant{}, id).Error; err != nil {
+	if err := c.db.Delete(&dbo.Attendant{}, id).Error; err != nil {
 		return err
 	}
 
