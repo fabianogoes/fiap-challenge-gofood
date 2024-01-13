@@ -8,7 +8,7 @@ tmp/
 portgres/data
 
 # exclude any development-specific files
-*.env
+# *.env
 *.log
 *.out
 *.exe
